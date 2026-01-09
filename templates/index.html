@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Option Pricing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+    <h1>📈 Black-Scholes Option Pricer</h1>
+
+    <form method="POST">
+        <label>Stock Ticker</label>
+        <input type="text" name="stock" placeholder="e.g. AAPL" required>
+
+        <label>Option Type</label>
+        <select name="option_type">
+            <option value="call">Call</option>
+            <option value="put">Put</option>
+        </select>
+
+        <label>Strike Price ($)</label>
+        <input type="number" name="strike" required>
+
+        <label>Time to Expiration (months)</label>
+        <input type="number" name="maturity" required>
+
+        <button type="submit">Calculate</button>
+    </form>
+
+    {% if result %}
+    <div class="result">
+        <h2>Result ({{result.type}} Option)</h2>
+        <p><strong>Stock:</strong> {{ result.stock }}</p>
+        <p><strong>Current Price:</strong> ${{ result.current_price }}</p>
+        <p><strong>Strike Price:</strong> ${{ result.strike_price }}</p>
+        <p><strong>Time to Expiration:</strong> {{ result.time_months }} months</p>
+        <p><strong>Risk-Free Rate:</strong> {{ result.risk_free_rate }}%</p>
+        <p class="price">Option Price: ${{ result.option_price }}</p>
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>
