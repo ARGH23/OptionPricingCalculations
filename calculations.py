@@ -56,72 +56,63 @@ def get_risk_free_rate(country="US", maturity=3):
     
     print(country)
     
-    all_lens = []
-    for i in tickers[country]:
-        all_lens.append(i)
-    all_lens = sorted(all_lens)
-    mini = all_lens[0]
-    maxi = all_lens[-1]
 
-    if (maturity in tickers[country]):
-        ticker = tickers[country][maturity]
-        data = yf.Ticker(ticker).history()
-        return data["Close"].iloc[-1] / 100
-    
-    elif maturity < mini or len(all_lens) == 1:
-        total_points = 0
-        xsum = 0
-        ysum = 0
-        xysum = 0
-        x2sum = 0
+    #doing this now for convenience and safety
+    x_points = []
+    y_points = []
 
-        for i in tickers[country]:
-            xp = i
-            ticker = tickers[country][i]
-            yp = (yf.Ticker(ticker).history())["Close"].iloc[-1] / 100
+    for maturity_len, ticker in tickers[country].items():
+        y = safe_last_yield(ticker)
+        if y is not None:
+            x_points.append(maturity_len)
+            y_points.append(y)
 
-            total_points += 1
-            xsum += xp
-            ysum += yp
-            xysum += xp*yp
-            x2sum += xp**2
-        
-        gradient = (total_points * xysum - xsum * ysum)/(total_points * x2sum - (xsum)**2)
-        b = (ysum - gradient*xsum)/total_points
-        return gradient*maturity + b
+    # If nothing worked, fallback
+    if not x_points:
+        return get_risk_free_rate("US", maturity)
 
+    mini = x_points[0]
+    maxi = x_points[-1]
+
+
+    #defined rate
+    if maturity in x_points:
+        return y_points[x_points.index(maturity)]
+
+
+    #least square solution
+    elif maturity < mini or len(x_points) == 1:
+        x = np.array(x_points)
+        y = np.array(y_points)
+
+        gradient = np.cov(x, y, bias=True)[0, 1] / np.var(x)
+        intercept = y.mean() - gradient * x.mean()
+
+        return gradient * maturity + intercept
+
+
+    #linear interpolation case 1
     elif maturity > maxi:
-        d1x = all_lens[-2]
-        ticker = tickers[country][d1x]
-        d1y = (yf.Ticker(ticker).history())["Close"].iloc[-1] / 100
+        x1, x2 = x_points[-2], x_points[-1]
+        y1, y2 = y_points[-2], y_points[-1]
 
-        d2x = all_lens[-1]
-        ticker = tickers[country][d2x]
-        d2y = (yf.Ticker(ticker).history())["Close"].iloc[-1] / 100
+        gradient = (y2 - y1) / (x2 - x1)
+        intercept = y1 - gradient * x1
 
-        gradient = (d2y - d1y)/(d2x - d1x)
-        b = d1y - gradient*d1x
-        return gradient * maturity + b
+        return gradient * maturity + intercept
 
+
+    #linear interpolation case 2
     else:
-        small_term = 0
-        big_term = 1
+        for i in range(len(x_points) - 1):
+            if x_points[i] < maturity < x_points[i + 1]:
+                x1, x2 = x_points[i], x_points[i + 1]
+                y1, y2 = y_points[i], y_points[i + 1]
 
-        while (maturity > all_lens[big_term]):
-            small_term += 1
-            big_term += 1
-        
-        d1x = all_lens[small_term]
-        ticker = tickers[country][d1x]
-        d1y = (yf.Ticker(ticker).history())["Close"].iloc[-1] / 100
+                gradient = (y2 - y1) / (x2 - x1)
+                intercept = y1 - gradient * x1
 
-        d2x = all_lens[big_term]
-        ticker = tickers[country][d2x]
-        d2y = (yf.Ticker(ticker).history())["Close"].iloc[-1] / 100
-
-        gradient = (d2y - d1y)/(d2x - d1x)
-        b = d1y - gradient*d1x
-        return gradient * maturity + b
+                return gradient * maturity + intercept
 
 
 
