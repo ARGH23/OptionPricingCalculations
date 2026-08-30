@@ -18,6 +18,91 @@ def black_scholes(option_type, sigma, K, S, T, r):
     return price
 
 
+def greeks(option_type, sigma, K, S, T, r):
+    """
+    Analytic Black-Scholes Greeks (no dividend yield, matching black_scholes()).
+
+    vega is scaled per 1% change in volatility, theta per calendar day,
+    and rho per 1% change in the risk-free rate.
+    """
+    d1 = (np.log(S / K) + (r + sigma**2 / 2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    pdf_d1 = norm.pdf(d1)
+
+    gamma = pdf_d1 / (S * sigma * np.sqrt(T))
+    vega = S * pdf_d1 * np.sqrt(T) / 100
+
+    if option_type == "call":
+        delta = norm.cdf(d1)
+        theta = (
+            -(S * pdf_d1 * sigma) / (2 * np.sqrt(T))
+            - r * K * np.exp(-r * T) * norm.cdf(d2)
+        ) / 365
+        rho = K * T * np.exp(-r * T) * norm.cdf(d2) / 100
+    else:
+        delta = norm.cdf(d1) - 1
+        theta = (
+            -(S * pdf_d1 * sigma) / (2 * np.sqrt(T))
+            + r * K * np.exp(-r * T) * norm.cdf(-d2)
+        ) / 365
+        rho = -K * T * np.exp(-r * T) * norm.cdf(-d2) / 100
+
+    return {
+        "delta": round(float(delta), 4),
+        "gamma": round(float(gamma), 6),
+        "vega": round(float(vega), 4),
+        "theta": round(float(theta), 4),
+        "rho": round(float(rho), 4),
+    }
+
+
+def monte_carlo_price(option_type, sigma, K, S, T, r, n_sims=100_000, seed=None):
+    """
+    Monte Carlo estimate of the option price by simulating terminal stock
+    prices under geometric Brownian motion (risk-neutral measure).
+    """
+    rng = np.random.default_rng(seed)
+    Z = rng.standard_normal(n_sims)
+    S_T = S * np.exp((r - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * Z)
+
+    if option_type == "call":
+        payoffs = np.maximum(S_T - K, 0)
+    else:
+        payoffs = np.maximum(K - S_T, 0)
+
+    discounted = np.exp(-r * T) * payoffs
+    price = discounted.mean()
+    std_error = discounted.std(ddof=1) / np.sqrt(n_sims)
+
+    return {
+        "price": round(float(price), 2),
+        "std_error": round(float(std_error), 4),
+        "ci_low": round(float(price - 1.96 * std_error), 2),
+        "ci_high": round(float(price + 1.96 * std_error), 2),
+        "n_sims": n_sims,
+    }
+
+
+def payoff_diagram(option_type, K, premium, S, spread=0.4, n_points=50):
+    """
+    Net P&L at expiry (payoff minus premium paid) across a range of
+    terminal stock prices, for charting.
+    """
+    S_min = S * (1 - spread)
+    S_max = S * (1 + spread)
+    S_range = np.linspace(S_min, S_max, n_points)
+
+    if option_type == "call":
+        payoff = np.maximum(S_range - K, 0) - premium
+    else:
+        payoff = np.maximum(K - S_range, 0) - premium
+
+    return {
+        "stock_prices": [round(float(x), 2) for x in S_range],
+        "pnl": [round(float(y), 2) for y in payoff],
+    }
+
+
 # For safety
 def safe_last_yield(ticker):
     hist = yf.Ticker(ticker).history(period="1mo")
@@ -115,11 +200,6 @@ def get_risk_free_rate(country="US", maturity=3):
                 return gradient * maturity + intercept
 
 
-
-
-
-
-
 def price_option(stock_name, option_type, K, T_months):
     # Risk-free rate (3-month T-bill)
     info = yf.Ticker(stock_name).info
@@ -137,6 +217,9 @@ def price_option(stock_name, option_type, K, T_months):
     T = T_months / 12
 
     option_price = black_scholes(option_type, sigma, K, S, T, r)
+    option_greeks = greeks(option_type, sigma, K, S, T, r)
+    mc = monte_carlo_price(option_type, sigma, K, S, T, r)
+    payoff = payoff_diagram(option_type, K, option_price, S)
 
     return {
         "stock": stock_name,
@@ -145,5 +228,8 @@ def price_option(stock_name, option_type, K, T_months):
         "time_months": T_months,
         "risk_free_rate": round(r * 100, 2),
         "option_price": round(option_price, 2),
-        "type": option_type.capitalize()
+        "type": option_type.capitalize(),
+        "greeks": option_greeks,
+        "monte_carlo": mc,
+        "payoff": payoff
     }
