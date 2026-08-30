@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Option Pricing</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -39,6 +40,55 @@
         <p><strong>Risk-Free Rate:</strong> {{ result.risk_free_rate }}%</p>
         <p class="price">Option Price: ${{ result.option_price }}</p>
     </div>
+
+    <div class="result">
+        <h2>Greeks</h2>
+        <p><strong>Delta:</strong> {{ result.greeks.delta }}</p>
+        <p><strong>Gamma:</strong> {{ result.greeks.gamma }}</p>
+        <p><strong>Vega</strong> (per 1% vol): {{ result.greeks.vega }}</p>
+        <p><strong>Theta</strong> (per day): {{ result.greeks.theta }}</p>
+        <p><strong>Rho</strong> (per 1% rate): {{ result.greeks.rho }}</p>
+    </div>
+
+    <div class="result">
+        <h2>Monte Carlo Estimate</h2>
+        <p><strong>Price:</strong> ${{ result.monte_carlo.price }}</p>
+        <p><strong>95% CI:</strong> [${{ result.monte_carlo.ci_low }}, ${{ result.monte_carlo.ci_high }}]</p>
+        <p><strong>Std Error:</strong> {{ result.monte_carlo.std_error }}</p>
+        <p><strong>Simulations:</strong> {{ result.monte_carlo.n_sims }}</p>
+    </div>
+
+    <div class="result">
+        <h2>Payoff at Expiry</h2>
+        <canvas id="payoffChart" height="300"></canvas>
+    </div>
+
+    <script>
+        const stockPrices = {{ result.payoff.stock_prices | tojson }};
+        const pnl = {{ result.payoff.pnl | tojson }};
+
+        new Chart(document.getElementById('payoffChart'), {
+            type: 'line',
+            data: {
+                labels: stockPrices,
+                datasets: [{
+                    label: 'Net P&L at expiry',
+                    data: pnl,
+                    borderColor: '#1d4ed8',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    x: { title: { display: true, text: 'Stock price at expiry' } },
+                    y: { title: { display: true, text: 'P&L' } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    </script>
     {% endif %}
 </div>
 
